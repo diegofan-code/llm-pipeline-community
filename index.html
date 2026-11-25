@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Community LLM Pipeline</title>
+<meta name="description" content="Twelve practices for running LLMs in production. Five came from my post, the rest from the engineers who commented on it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f5f0; --ink:#1d1d1b; --muted:#66645e; --line:#dcd8cf; --card:#ffffff;
+  --blue:#2563eb; --blue-soft:#e8effd; --orange:#ea580c; --orange-soft:#fdeee4;
+  --green:#16a34a; --green-soft:#e6f5ea; --purple:#7c3aed; --purple-soft:#efe9fd;
+  --pink:#db2777; --pink-soft:#fce8f1; --code:#f2efe8;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#141413;--ink:#ecebe6;--muted:#a3a19a;--line:#33322f;--card:#1e1e1c;
+  --blue:#7aa7ff;--blue-soft:#1b2740;--orange:#fb9a5b;--orange-soft:#3a2518;--green:#5fd38a;--green-soft:#16301f;
+  --purple:#b69cff;--purple-soft:#2a2140;--pink:#f472b6;--pink-soft:#3a1a2b;--code:#232320}
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:860px;margin:0 auto;padding:28px 16px 80px}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;line-height:1.2;letter-spacing:-.01em}
+h1{font-size:clamp(30px,6vw,48px);margin:.2em 0 .4em}
+h2{font-size:clamp(23px,4.4vw,30px);margin:2em 0 .5em}
+p{margin:0 0 1em}
+.kicker{font:600 12px/1 Inter;text-transform:uppercase;letter-spacing:.12em;color:var(--blue)}
+.dek{font-size:19px;color:var(--muted)}
+.byline{font-size:14px;color:var(--muted);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0;margin:18px 0 26px}
+code,.mono{font-family:"JetBrains Mono",monospace;font-size:.86em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 8px}
+.stats div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.stats b{display:block;font:700 30px Fraunces,serif}
+.stats span{font-size:13.5px;color:var(--muted)}
+/* toolbar */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+.chip{all:unset;cursor:pointer;font:600 13.5px Inter;padding:7px 13px;border-radius:99px;border:1px solid var(--line);color:var(--muted);background:var(--card)}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:focus-visible,.tile:focus-visible,.btn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.btn{all:unset;cursor:pointer;font:600 14px Inter;padding:9px 15px;border-radius:99px;background:var(--ink);color:var(--bg)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--ink)}
+.spacer{flex:1}
+/* request */
+.req{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0 16px;font-size:15px}
+.req .tag{font:600 11px "JetBrains Mono";background:var(--ink);color:var(--bg);padding:4px 8px;border-radius:7px;white-space:nowrap}
+.req .il{margin-left:auto;font:12px "JetBrains Mono";color:var(--muted)}
+/* grid */
+.sec{margin:16px 0 6px;font:600 12px "JetBrains Mono";letter-spacing:.12em}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:640px){.grid{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr}}
+.tile{all:unset;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:4px;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px 12px 30px;transition:transform .15s,border-color .15s,background .15s}
+.tile:hover{transform:translateY(-2px)}
+.tile .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font:700 13px Inter}
+.tile .t{font-weight:700;font-size:15.5px;line-height:1.25}
+.tile .s{font-size:13px;color:var(--muted);line-height:1.4}
+.tile .src{position:absolute;bottom:8px;right:10px;font:700 10.5px Inter;letter-spacing:.04em}
+.tile .ev{display:none;font:600 11.5px "JetBrains Mono";margin-top:4px}
+.tile.run .ev{display:block}
+.tile.dim{opacity:.28}
+.tile.sel{box-shadow:0 0 0 3px var(--ink) inset}
+.c0 .n{background:var(--blue)} .c0.on{border-color:var(--blue);background:var(--blue-soft)} .c0 .ev{color:var(--blue)}
+.c1 .n{background:var(--orange)} .c1.on{border-color:var(--orange);background:var(--orange-soft)} .c1 .ev{color:var(--orange)}
+.c2 .n{background:var(--green)} .c2.on{border-color:var(--green);background:var(--green-soft)} .c2 .ev{color:var(--green)}
+.c3 .n{background:var(--purple)} .c3.on{border-color:var(--purple);background:var(--purple-soft)} .c3 .ev{color:var(--purple)}
+.src.post{color:var(--muted)} .src.com{color:var(--pink)}
+/* detail */
+.detail{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 18px 8px;min-height:120px}
+.detail .hint{color:var(--muted);font-size:15px}
+.detail h3{margin:.2em 0 .3em;font-size:24px}
+.detail .from{display:inline-block;font:700 11.5px Inter;padding:3px 9px;border-radius:99px;margin-bottom:8px}
+.from.post{background:var(--code);color:var(--muted)} .from.com{background:var(--pink-soft);color:var(--pink)}
+blockquote{margin:6px 0 14px;padding:4px 0 4px 14px;border-left:3px solid var(--pink);font-family:Fraunces,serif;font-size:19px;line-height:1.45}
+.detail h4{margin:14px 0 4px;font:700 12px Inter;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.detail ul{margin:0 0 10px;padding-left:20px}
+.detail li{margin-bottom:4px}
+pre{background:var(--code);border-radius:12px;padding:12px;overflow-x:auto;font:12.8px/1.55 "JetBrains Mono",monospace;margin:4px 0 12px}
+.nav{display:flex;justify-content:space-between;gap:8px;margin:6px 0 10px}
+/* result */
+.result{display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--bg);border-radius:14px;padding:12px 14px;margin-top:14px;font-weight:600;font-size:15px;flex-wrap:wrap}
+.pips{display:flex;gap:5px}
+.pips i{width:11px;height:11px;border-radius:50%;background:#555}
+.pips i.on{background:#f59e0b}
+/* start + checklist */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:640px){.cards{grid-template-columns:1fr}}
+.cards div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.cards b{display:block;margin-bottom:4px}
+.cards span{font-size:14.5px;color:var(--muted)}
+.check{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.check label{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--line);font-size:15px}
+.check label:last-of-type{border-bottom:0}
+.check input{margin-top:5px;accent-color:var(--green)}
+.score{font:600 14px Inter;color:var(--muted);margin:10px 0 0}
+.note{font-size:13.5px;color:var(--muted)}
+a{color:var(--blue)}
+footer{margin-top:40px;font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">LLMs in production</div>
+  <h1>Your comments built this LLM pipeline</h1>
+  <p class="dek">I shared 5 practices for LLM projects. Engineers who run LLMs in production added the rest. Click any step to see the idea, why it matters and how to use it in your own project.</p>
+  <div class="byline">Diego Fan · AI Engineer · LLMs, RAG &amp; Agents in Production</div>
+
+  <div class="stats">
+    <div><b>5</b><span>practices in the original post</span></div>
+    <div><b>20+</b><span>comments from practitioners</span></div>
+    <div><b>12</b><span>steps in the final pipeline</span></div>
+  </div>
+
+  <h2>The pipeline</h2>
+  <p>Follow one request from start to finish. Press <b>Play the request</b>, or click the steps yourself.</p>
+
+  <div class="bar" role="toolbar" aria-label="Filter steps">
+    <button class="chip on" data-f="all">All 12</button>
+    <button class="chip" data-f="post">From my post</button>
+    <button class="chip" data-f="com">💬 From the comments</button>
+    <span class="spacer"></span>
+    <button class="btn" id="play">▶ Play the request</button>
+    <button class="btn ghost" id="reset">Reset</button>
+  </div>
+
+  <div class="req"><span class="tag">REQUEST</span><span>"What's the status of invoice A-1043?"</span><span class="il">illustrative</span></div>
+
+  <div id="grid"></div>
+
+  <div class="result" aria-live="polite"><span class="mono">RESULT</span><span class="pips" id="pips"></span><span id="restext">Press play, or click a step.</span></div>
+
+  <div class="detail" id="detail" aria-live="polite"><p class="hint">👆 Click a step to open it.</p></div>
+
+  <h2>Where to start</h2>
+  <p>Twelve steps is a lot for a small project. If you are starting out, this order pays off fastest:</p>
+  <div class="cards">
+    <div><b>1. Validate the output</b><span>A Pydantic model and one re-ask. No new infrastructure, and it fixes most broken JSON.</span></div>
+    <div><b>2. Log every call</b><span>Prompt version, model, tokens, latency. A few lines that make every incident debuggable.</span></div>
+    <div><b>3. Add 20 eval cases</b><span>Real inputs with expected outputs, run in CI. Now every prompt change has a score.</span></div>
+  </div>
+
+  <h2>Your checklist</h2>
+  <p>Tick what your project already does. It stays in this browser only.</p>
+  <div class="check" id="check"></div>
+  <p class="score" id="score"></p>
+  <div class="bar"><button class="btn ghost" id="copy">Copy as Markdown</button><span class="note" id="copied"></span></div>
+
+  <footer>
+    <p>The ideas marked 💬 came from comments on my LinkedIn post. I rewrote them in my own words and left out names. Thank you to everyone who joined the conversation.</p>
+    <p>Related: <a href="https://diegofan-code.github.io/VERA/">The Two-Judge Loop (VERA)</a>, my agent evaluation loop compared with the ACE paper.</p>
+  </footer>
+</main>
+<script>
+const SEC=[{n:'Before the call',k:0},{n:'During the call',k:1},{n:'After the call',k:2},{n:'Always',k:3}];
+const COL=['var(--blue)','var(--orange)','var(--green)','var(--purple)'];
+const S=[
+{s:0,t:'Cache',sub:'key = input + prompt version',src:'post',ev:'miss → continue',
+ q:'Teams tend to add caching only after the first big invoice arrives.',
+ why:'The same question with the same prompt costs the same every time you call the model. A cache answers repeats for free and in milliseconds.',
+ how:['Build the key from a hash of the input, the prompt version and the model name.','Include the prompt version, or a new prompt will serve old answers.','Log the cache hit rate next to cost: it makes the case for caching.','Exact cache first. Semantic cache only with a threshold and an eval.'],
+ code:`key = sha256(f"{model}|{prompt_v}|{text}".encode()).hexdigest()
+if key in cache:
+    return cache[key]          # no model call, no cost`},
+{s:0,t:'Route by difficulty',sub:'small model first',src:'post',ev:'easy → small model',
+ q:'Sending the easy majority to a small model, and only the hard cases to a big one, was the change that paid back fastest.',
+ why:'Most requests are easy. Sending all of them to the biggest model wastes money and adds latency.',
+ how:['Prefer a cascade: the small model answers, a verifiable check runs, failures escalate.','Do not trust the model’s self-reported confidence much.','Set the threshold offline: run both models on the eval set, plot cost against accuracy.','Watch the escalation rate in production. A jump means the data changed.'],
+ code:`ans = small_model(q)
+if not passes_checks(ans):      # schema, citation exists, cheap judge
+    ans = big_model(q)`},
+{s:0,t:'Deadline',sub:'one budget per request',src:'com',ev:'8 s budget',
+ q:'Set one deadline for the entire request. Every retry and fallback should only get the time that is left, because separate timeouts can still add up to a very long wait.',
+ why:'Per-call timeouts add up. Two models with two retries each and a 30 s timeout can mean two minutes of waiting.',
+ how:['Start every request with a total budget the user accepts (e.g. 8 s).','Before each attempt, compute the time left and use it as the timeout.','If too little time is left, skip the attempt and return a safe fallback answer.','Test it with a deliberately slow primary model.'],
+ code:`end = time.monotonic() + 8.0
+for model in (primary, fallback):
+    left = end - time.monotonic()
+    if left < 1.0:
+        return safe_answer()
+    try: return call(model, q, timeout=left)
+    except TimeoutError: continue`},
+{s:1,t:'Circuit breaker',sub:'provider down? stop calling',src:'com',ev:'closed ✓',
+ q:'Handling the model like any unreliable external API, with a circuit breaker in front, made the system much calmer to operate.',
+ why:'Retries protect one request. When the provider is clearly down, a breaker stops every request from waiting for the same timeout.',
+ how:['Closed: calls go through and failures are counted.','Open: after N failures, skip the provider and go straight to the fallback.','Half-open: after a cooldown, let one test call through to decide.','Libraries such as pybreaker do this for you.'],
+ code:`if breaker.allows():
+    try: r = call(primary); breaker.success()
+    except Exception: breaker.failure(); r = call(fallback)
+else:
+    r = call(fallback)`},
+{s:1,t:'Retry',sub:'transient errors only',src:'post',ev:'timeout → retry ✓',
+ q:'Ask again once, then fail with a clear error. Retrying forever only pays again for the same bad output.',
+ why:'Retries help with timeouts and rate limits. Asking the same question again rarely fixes bad content, and every attempt is billed.',
+ how:['Retry transient errors (timeouts, 429, 503) with exponential backoff.','Keep retries inside the request deadline.','Do not blindly retry bad content. See step 8.'],
+ code:`for attempt in range(2):
+    try: return call(model, q, timeout=left)
+    except (TimeoutError, RateLimit):
+        time.sleep(2 ** attempt * 0.5)`},
+{s:1,t:'Fallback model',sub:'kept warm, tested too',src:'post',ev:'ready (tested daily)',
+ q:'Always keep a fallback model ready, and exercise it regularly, or it may be broken the day you need it.',
+ why:'A fallback you never exercise can be broken, slow, or using a prompt that was never tuned for it.',
+ how:['Run your eval on the fallback model too, on a schedule.','Version the fallback model and its prompt like the primary.','Log which model answered every request.'],
+ code:`MODELS = {"primary": "model-a@2026-10", "fallback": "model-b@2026-09"}
+# nightly: run_eval(MODELS["fallback"])`},
+{s:2,t:'Validate',sub:'schema → types → rules',src:'post',ev:'score: 15 ✗ range',
+ q:'An answer that looks right but breaks the next step is worse than an API error. Check it before anything downstream uses it.',
+ why:'A failed call is loud. An almost-valid response is silent until it breaks something, or quietly stores wrong data.',
+ how:['Layer 1, format: valid JSON with the right fields.','Layer 2, types and limits: score between 1 and 10, allowed values only.','Layer 3, business rules: does this ID exist? does the value match the database?','Validate at the boundary, right after the model.'],
+ code:`class Feedback(BaseModel):
+    score: int = Field(ge=1, le=10)
+    kind: Literal["grammar", "content"]
+fb = Feedback.model_validate_json(raw)   # raises if invalid`},
+{s:2,t:'Re-ask once',sub:'with the error, then fail closed',src:'com',ev:'re-ask → valid ✓',
+ q:'Put the validation error into the retry prompt. One informed retry usually fixes nearly valid JSON, where blind retries keep failing.',
+ why:'A blind retry repeats the same mistake. The validation message tells the model exactly what to fix.',
+ how:['Re-ask once, with the validation error in the prompt.','Low-risk outputs: one re-ask, then fail closed.','High-risk outputs (writes, emails, money): fail closed on the first invalid response.','Log retry counts per prompt version. A jump is often the first sign of a behavior change.'],
+ code:`try:
+    return Feedback.model_validate_json(raw)
+except ValidationError as e:
+    raw = call(model, q + f"\\nFix this error: {e}")
+    return Feedback.model_validate_json(raw)   # second failure → fail closed`},
+{s:2,t:'Human / dead-letter queue',sub:'bad output needs a destination',src:'com',ev:'not needed ✓',
+ q:'Everyone talks about retries, but what happens to a bad response after the last retry fails?',
+ why:'Without a destination, failures vanish into a generic error. With one, they become reviews and eval cases.',
+ how:['Send final failures to a queue with full context: input, output, error, prompt version, model.','A human reviews or reprocesses them.','Real failures become new eval cases.','Remove personal data before reusing them.'],
+ code:`dead_letters.put({"input": q, "output": raw, "error": str(e),
+                  "prompt_v": prompt_v, "model": model})`},
+{s:3,t:'Log every call',sub:'version · model · tokens · latency',src:'com',ev:'v8 · 812 tok · 2.1 s',
+ q:'Record the prompt version, model, tokens and latency on every call. Without that, the first production incident is very hard to investigate.',
+ why:'"The bot got worse last week" becomes a query you can answer in minutes.',
+ how:['Log prompt_version, model, tokens in/out, latency, retry count and a request id.','Group by prompt version to spot changes.','Log every failure too: that is what feeds your evals.'],
+ code:`log.info(json.dumps({"prompt_version": pv, "model": m,
+  "tokens_in": u.input, "tokens_out": u.output,
+  "latency_ms": ms, "retries": n}))`},
+{s:3,t:'Eval in CI',sub:'20 labelled cases, fallback off',src:'post',ev:'20/20 ✓',
+ q:'The step most often skipped is an eval that lives next to the prompt; about 20 labelled cases in CI already catch most regressions. Also switch fallbacks off while evaluating, or you measure the wrong model.',
+ why:'People version the prompt, but nothing tells them the new version is better. Models also change behavior after silent updates.',
+ how:['Keep 20 real inputs with expected outputs next to the prompt.','Run them in CI on every prompt or model change, and on a schedule.','Turn off fallback and cache during evals; log which model answered.','Pin model versions so a provider update can not surprise you.'],
+ code:`def test_prompt_v8():
+    score = run_eval("evals/feedback.jsonl", fallback=False, cache=False)
+    assert score >= 0.9`},
+{s:3,t:'Check the steps',sub:'valid JSON ≠ right action',src:'com',ev:'1 tool call, no dupes ✓',
+ q:'In agents, a response can match the schema and still be the wrong action: the wrong tool, or the same call repeated after a retry.',
+ why:'That is where the surprise bill and the real damage come from: a payment or an email sent twice.',
+ how:['Check the trajectory: right tools, right arguments, sane number of steps.','Flag repeated calls with the same arguments, especially on write tools.','Give every write tool an idempotency key so repeats are skipped in production.'],
+ code:`calls = Counter((c.name, json.dumps(c.args, sort_keys=True)) for c in tool_calls)
+assert all(n == 1 for n in calls.values()), "duplicate tool call"`}
+];
+const grid=document.getElementById('grid');
+let html='';
+SEC.forEach(sec=>{
+  html+=`<div class="sec" style="color:${COL[sec.k]}">${sec.n.toUpperCase()}</div><div class="grid">`;
+  S.forEach((x,i)=>{ if(x.s!==sec.k) return;
+    html+=`<button class="tile c${x.s}" data-i="${i}" data-src="${x.src}" aria-label="Step ${i+1}: ${x.t}">
+      <span class="n">${i+1}</span><span class="t">${x.t}</span><span class="s">${x.sub}</span>
+      <span class="ev">${x.ev}</span>
+      <span class="src ${x.src}">${x.src==='com'?'💬 COMMENTS':'▢ POST'}</span></button>`;});
+  html+='</div>';
+});
+grid.innerHTML=html;
+const tiles=[...document.querySelectorAll('.tile')].sort((a,b)=>a.dataset.i-b.dataset.i);
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const pips=document.getElementById('pips'); pips.innerHTML='<i></i>'.repeat(12);
+function setPips(n){[...pips.children].forEach((p,k)=>p.classList.toggle('on',k<n))}
+function show(i){
+  const x=S[i];
+  try{history.replaceState(null,'','#step-'+(i+1))}catch(e){}
+  tiles.forEach((t,k)=>t.classList.toggle('sel',k===i));
+  document.getElementById('detail').innerHTML=`
+   <div class="nav"><button class="btn ghost" onclick="show(${(i+11)%12})">← Prev</button><button class="btn ghost" onclick="show(${(i+1)%12})">Next →</button></div>
+   <span class="from ${x.src}">${x.src==='com'?'💬 Added in the comments':'▢ In my original post'}</span>
+   <h3>${i+1}. ${x.t}</h3>
+   <h4>The idea</h4><blockquote>${esc(x.q)}</blockquote>
+   <h4>Why it matters</h4><p>${esc(x.why)}</p>
+   <h4>How to apply it in your project</h4><ul>${x.how.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>
+   <h4>Minimal code</h4><pre>${esc(x.code)}</pre>`;
+}
+window.show=show;
+tiles.forEach(t=>t.addEventListener('click',()=>{stop();show(+t.dataset.i);
+  if(window.innerWidth<700)document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'start'});}));
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
+  document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c));
+  tiles.forEach(t=>t.classList.toggle('dim',c.dataset.f!=='all'&&t.dataset.src!==c.dataset.f));
+});
+let timer=null;
+function stop(){if(timer){clearInterval(timer);timer=null;document.getElementById('play').textContent='▶ Play the request'}}
+function resetRun(){stop();tiles.forEach(t=>t.classList.remove('on','run','sel'));setPips(0);
+  document.getElementById('restext').textContent='Press play, or click a step.';}
+document.getElementById('reset').onclick=resetRun;
+document.getElementById('play').onclick=()=>{
+  if(timer){stop();return}
+  resetRun(); let i=0; document.getElementById('play').textContent='❚❚ Pause';
+  const tick=()=>{ if(i>=12){stop();document.getElementById('restext').textContent='Answer delivered ✓  2.1 s · v8 · logged';return}
+    tiles[i].classList.add('on','run'); setPips(i+1); show(i);
+    document.getElementById('restext').textContent=`Step ${i+1}: ${S[i].t} → ${S[i].ev}`; i++; };
+  tick(); timer=setInterval(tick,1600);
+};
+// deep link: #step-3 opens step 3
+function fromHash(){const m=location.hash.match(/step-(\d+)/); if(m){const i=Math.min(12,Math.max(1,+m[1]))-1; show(i);}}
+window.addEventListener('hashchange',fromHash); fromHash();
+// checklist
+const chk=document.getElementById('check');
+let saved={}; try{saved=JSON.parse(localStorage.getItem('llm-pipeline-check')||'{}')}catch(e){}
+chk.innerHTML=S.map((x,i)=>`<label><input type="checkbox" data-i="${i}" ${saved[i]?'checked':''}><span><b>${i+1}. ${x.t}</b>: ${x.sub}</span></label>`).join('');
+function score(){const n=[...chk.querySelectorAll('input')].filter(c=>c.checked).length;
+  document.getElementById('score').textContent=`${n}/12 in place. `+(n>=10?'Production ready.':n>=6?'Solid start.':'Start with steps 7, 10 and 11.');}
+chk.addEventListener('change',e=>{saved[e.target.dataset.i]=e.target.checked;try{localStorage.setItem('llm-pipeline-check',JSON.stringify(saved))}catch(err){}score();});
+score();
+document.getElementById('copy').onclick=()=>{
+  const md=S.map((x,i)=>`- [${chk.querySelectorAll('input')[i].checked?'x':' '}] ${i+1}. ${x.t}: ${x.sub}`).join('\n');
+  const done=()=>document.getElementById('copied').textContent='Copied ✓';
+  if(navigator.clipboard){navigator.clipboard.writeText(md).then(done).catch(()=>{document.getElementById('copied').textContent='Copy failed'})}
+};
+</script>
+</body>
+</html>
